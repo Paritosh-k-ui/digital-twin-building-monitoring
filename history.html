@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Assessment History</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Arial,sans-serif; }
+
+body {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    min-height: 100vh;
+    padding: 28px;
+    color: white;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.topbar h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg,#a5b4fc,#38bdf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.topbar p { color: #64748b; font-size: 0.85rem; margin-top: 3px; }
+
+.nav { display: flex; gap: 10px; }
+
+.btn {
+    padding: 9px 18px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 0.85rem;
+    transition: opacity 0.2s;
+}
+.btn:hover { opacity: 0.85; }
+.btn-indigo { background: linear-gradient(135deg,#6366f1,#38bdf8); color: white; }
+.btn-green  { background: #134e22; color: #22c55e; border: 1px solid #22c55e; }
+
+.summary {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.sum-card {
+    background: rgba(30,41,59,0.9);
+    border-radius: 14px;
+    padding: 16px 22px;
+    border: 1px solid #334155;
+    text-align: center;
+    min-width: 120px;
+}
+
+.sum-card .val { font-size: 1.8rem; font-weight: bold; }
+.sum-card .lbl { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px; }
+
+.val-indigo { background: linear-gradient(135deg,#a5b4fc,#38bdf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.val-green  { color: #22c55e; }
+.val-yellow { color: #f59e0b; }
+.val-red    { color: #ef4444; }
+
+.search-wrap { margin-bottom: 18px; }
+.search-wrap input {
+    width: 100%;
+    max-width: 420px;
+    padding: 11px 16px;
+    background: rgba(30,41,59,0.9);
+    border: 1px solid #334155;
+    border-radius: 10px;
+    color: white;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border 0.2s;
+}
+.search-wrap input:focus { border-color: #6366f1; }
+
+.table-wrap {
+    background: rgba(30,41,59,0.9);
+    border-radius: 18px;
+    border: 1px solid #334155;
+    overflow: hidden;
+    overflow-x: auto;
+}
+
+table { width: 100%; border-collapse: collapse; min-width: 800px; }
+
+thead tr { background: #0f172a; }
+thead th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 0.72rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid #334155;
+    white-space: nowrap;
+}
+
+tbody tr { border-bottom: 1px solid #1e293b; transition: background 0.15s; }
+tbody tr:hover { background: rgba(15,23,42,0.6); }
+tbody tr:last-child { border-bottom: none; }
+tbody td { padding: 13px 16px; font-size: 0.88rem; color: #cbd5e1; }
+
+.bname { font-weight: bold; color: white; }
+
+.badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.badge-good     { background: #14532d; color: #22c55e; border: 1px solid #22c55e; }
+.badge-warning  { background: #451a03; color: #f59e0b; border: 1px solid #f59e0b; }
+.badge-critical { background: #450a0a; color: #ef4444; border: 1px solid #ef4444; }
+
+.risk-mini { display: flex; align-items: center; gap: 8px; }
+.risk-mini-bar { width: 60px; height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+.risk-mini-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg,#22c55e,#f59e0b,#ef4444); }
+
+.date { color: #64748b; font-size: 0.8rem; }
+
+.empty { text-align: center; padding: 60px; color: #64748b; }
+.empty .icon { font-size: 3rem; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div>
+        <h1>📋 Assessment History</h1>
+        <p>Complete log of all building structural assessments</p>
+    </div>
+    <div class="nav">
+        <a href="/" class="btn btn-indigo">+ New Assessment</a>
+        <a href="/dashboard" class="btn btn-green">🏙 Dashboard</a>
+    </div>
+</div>
+
+{% set total    = records|length %}
+{% set good     = records|selectattr(1, 'equalto', 'Good')|list|length %}
+{% set warning  = records|selectattr(1, 'equalto', 'Warning')|list|length %}
+{% set critical = records|selectattr(1, 'equalto', 'Critical')|list|length %}
+
+<div class="summary">
+    <div class="sum-card"><div class="val val-indigo">{{ total }}</div><div class="lbl">Total</div></div>
+    <div class="sum-card"><div class="val val-green">{{ good }}</div><div class="lbl">Good</div></div>
+    <div class="sum-card"><div class="val val-yellow">{{ warning }}</div><div class="lbl">Warning</div></div>
+    <div class="sum-card"><div class="val val-red">{{ critical }}</div><div class="lbl">Critical</div></div>
+</div>
+
+<div class="search-wrap">
+    <input type="text" id="searchInput" placeholder="🔍  Search by building name or condition..." onkeyup="filterTable()" />
+</div>
+
+<div class="table-wrap">
+{% if records %}
+<table id="histTable">
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Building</th>
+            <th>Condition</th>
+            <th>Confidence</th>
+            <th>Risk</th>
+            <th>Date</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in records %}
+    <tr>
+        <td style="color:#475569">{{ loop.index }}</td>
+        <td class="bname">{{ r[0] }}</td>
+        <td>
+            {% if r[1] == "Good" %}
+                <span class="badge badge-good">🟢 Good</span>
+            {% elif r[1] == "Warning" %}
+                <span class="badge badge-warning">🟡 Warning</span>
+            {% else %}
+                <span class="badge badge-critical">🔴 Critical</span>
+            {% endif %}
+        </td>
+        <td>{{ r[2] }}%</td>
+        <td>
+            <div class="risk-mini">
+                <div class="risk-mini-bar">
+                    <div class="risk-mini-fill" style="width:{{ r[3] }}%"></div>
+                </div>
+                {{ r[3] }}
+            </div>
+        </td>
+        <td class="date">{{ r[4] }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty">
+    <div class="icon">🏗</div>
+    <p>No assessments yet. Start by assessing a building.</p>
+</div>
+{% endif %}
+</div>
+
+<script>
+function filterTable() {
+    var input = document.getElementById("searchInput").value.toLowerCase();
+    var rows  = document.querySelectorAll("#histTable tbody tr");
+    rows.forEach(function(row) {
+        row.style.display = row.innerText.toLowerCase().includes(input) ? "" : "none";
+    });
+}
+</script>
+
+</body>
+</html>

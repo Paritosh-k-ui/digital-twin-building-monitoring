@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Building Digital Twin Dashboard</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Arial,sans-serif; }
+
+body {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    min-height: 100vh;
+    padding: 24px;
+    color: white;
+}
+
+/* ── Top Bar ── */
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.topbar h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #a5b4fc, #38bdf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.topbar p { color: #64748b; font-size: 0.85rem; margin-top: 3px; }
+
+.nav { display: flex; gap: 10px; }
+
+.btn {
+    padding: 9px 18px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 0.85rem;
+    transition: opacity 0.2s;
+}
+.btn:hover { opacity: 0.85; }
+.btn-indigo { background: linear-gradient(135deg,#6366f1,#38bdf8); color: white; }
+.btn-amber  { background: #451a03; color: #f59e0b; border: 1px solid #f59e0b; }
+
+/* ── Summary Row ── */
+.summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.sum-card {
+    background: rgba(30,41,59,0.9);
+    border-radius: 16px;
+    padding: 18px;
+    border: 1px solid #334155;
+    text-align: center;
+}
+
+.sum-card .val { font-size: 2rem; font-weight: bold; }
+.sum-card .lbl { font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+
+.val-indigo { background: linear-gradient(135deg,#a5b4fc,#38bdf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.val-green  { color: #22c55e; }
+.val-yellow { color: #f59e0b; }
+.val-red    { color: #ef4444; }
+
+/* ── Health Bar ── */
+.health-wrap {
+    background: rgba(30,41,59,0.9);
+    border-radius: 16px;
+    padding: 18px 22px;
+    border: 1px solid #334155;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.health-label { font-size: 0.85rem; color: #94a3b8; white-space: nowrap; }
+.health-score { font-size: 1.4rem; font-weight: bold; color: #22c55e; white-space: nowrap; }
+.health-bar { flex: 1; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden; min-width: 100px; }
+.health-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg,#22c55e,#38bdf8); transition: width 0.8s ease; }
+
+/* ── Building Cards Grid ── */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.building-card {
+    background: rgba(30,41,59,0.9);
+    border-radius: 18px;
+    padding: 20px;
+    border: 1px solid #334155;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.building-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+}
+
+.building-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+}
+
+.card-good::before     { background: linear-gradient(90deg,#22c55e,#16a34a); }
+.card-warning::before  { background: linear-gradient(90deg,#f59e0b,#d97706); }
+.card-critical::before { background: linear-gradient(90deg,#ef4444,#dc2626); }
+
+.card-thumb {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 14px;
+    border: 1px solid #334155;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 14px;
+}
+
+.card-name { font-size: 1rem; font-weight: bold; color: white; }
+.card-floors { font-size: 0.78rem; color: #64748b; margin-top: 3px; }
+
+.condition-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.badge-good     { background: #14532d; color: #22c55e; border: 1px solid #22c55e; }
+.badge-warning  { background: #451a03; color: #f59e0b; border: 1px solid #f59e0b; }
+.badge-critical { background: #450a0a; color: #ef4444; border: 1px solid #ef4444; }
+
+.card-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.meta-item { background: #0f172a; border-radius: 8px; padding: 9px 12px; }
+.meta-lbl { font-size: 0.68rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+.meta-val { font-size: 0.9rem; color: #e2e8f0; font-weight: 600; margin-top: 2px; }
+
+.risk-row { margin-top: 4px; }
+.risk-top { display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8; margin-bottom: 5px; }
+.risk-bar { height: 7px; background: #1e293b; border-radius: 4px; overflow: hidden; }
+.risk-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg,#22c55e,#f59e0b,#ef4444); }
+
+/* ── Building Visual ── */
+.building-visual {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin: 10px 0;
+}
+
+/* ── Latest Card ── */
+.latest {
+    background: rgba(30,41,59,0.9);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid #334155;
+    border-left: 4px solid #6366f1;
+}
+
+.latest h3 { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+.latest .bname { font-size: 1.1rem; font-weight: bold; color: white; margin-bottom: 8px; }
+.latest .lmeta { font-size: 0.82rem; color: #94a3b8; margin-top: 4px; }
+
+/* ── No buildings ── */
+.empty { text-align: center; padding: 60px; color: #64748b; }
+.empty .icon { font-size: 3rem; margin-bottom: 14px; }
+
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+    <div>
+        <h1>🏙 Building Digital Twin Dashboard</h1>
+        <p>Real-time structural health monitoring powered by ML</p>
+    </div>
+    <div class="nav">
+        <a href="/" class="btn btn-indigo">+ New Assessment</a>
+        <a href="/history" class="btn btn-amber">📋 History</a>
+    </div>
+</div>
+
+{% set total    = buildings|length %}
+{% set good     = namespace(count=0) %}
+{% set warning  = namespace(count=0) %}
+{% set critical = namespace(count=0) %}
+
+{% for b in buildings %}
+    {% if b[2] == "Good" %}     {% set good.count     = good.count + 1 %}
+    {% elif b[2] == "Warning" %}{% set warning.count  = warning.count + 1 %}
+    {% else %}                  {% set critical.count = critical.count + 1 %}
+    {% endif %}
+{% endfor %}
+
+{% set health_score = ((good.count / total) * 100)|round|int if total > 0 else 100 %}
+
+<!-- Summary -->
+<div class="summary">
+    <div class="sum-card">
+        <div class="val val-indigo">{{ total }}</div>
+        <div class="lbl">Total Buildings</div>
+    </div>
+    <div class="sum-card">
+        <div class="val val-green">{{ good.count }}</div>
+        <div class="lbl">Good</div>
+    </div>
+    <div class="sum-card">
+        <div class="val val-yellow">{{ warning.count }}</div>
+        <div class="lbl">Warning</div>
+    </div>
+    <div class="sum-card">
+        <div class="val val-red">{{ critical.count }}</div>
+        <div class="lbl">Critical</div>
+    </div>
+</div>
+
+<!-- Health Bar -->
+<div class="health-wrap">
+    <span class="health-label">Overall Structural Health</span>
+    <div class="health-bar">
+        <div class="health-fill" style="width:{{ health_score }}%"></div>
+    </div>
+    <span class="health-score">{{ health_score }}%</span>
+</div>
+
+<!-- Building Cards -->
+{% if buildings %}
+<div class="grid">
+{% for b in buildings %}
+{% set bname = b[0] %}
+{% set cond  = b[1] %}
+{% set risk  = b[2] %}
+{% set img   = b[3] %}
+
+{% if cond == "Good" %}
+    {% set card_class = "card-good" %}
+    {% set badge_class = "badge-good" %}
+    {% set icon = "🟢" %}
+{% elif cond == "Warning" %}
+    {% set card_class = "card-warning" %}
+    {% set badge_class = "badge-warning" %}
+    {% set icon = "🟡" %}
+{% else %}
+    {% set card_class = "card-critical" %}
+    {% set badge_class = "badge-critical" %}
+    {% set icon = "🔴" %}
+{% endif %}
+
+<div class="building-card {{ card_class }}">
+    {% if img %}
+    <img src="/{{ img }}" class="card-thumb" alt="{{ bname }}">
+    {% endif %}
+
+    <div class="card-header">
+        <div>
+            <div class="card-name">🏢 {{ bname }}</div>
+        </div>
+        <span class="condition-badge {{ badge_class }}">{{ icon }} {{ cond }}</span>
+    </div>
+
+    <div class="card-meta">
+        <div class="meta-item">
+            <div class="meta-lbl">Condition</div>
+            <div class="meta-val">{{ cond }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-lbl">Risk Score</div>
+            <div class="meta-val">{{ risk }}/100</div>
+        </div>
+    </div>
+
+    <div class="risk-row">
+        <div class="risk-top">
+            <span>Risk Level</span>
+            <span>{{ risk }}%</span>
+        </div>
+        <div class="risk-bar">
+            <div class="risk-fill" style="width:{{ risk }}%"></div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+{% else %}
+<div class="empty">
+    <div class="icon">🏗</div>
+    <p>No buildings assessed yet. Add your first building assessment.</p>
+</div>
+{% endif %}
+
+<!-- Latest Assessment -->
+{% if latest %}
+<div class="latest">
+    <h3>🔬 Latest ML Assessment</h3>
+    <div class="bname">{{ latest[0] }}</div>
+    {% if latest[1] == "Good" %}
+        <span class="condition-badge badge-good">🟢 Good</span>
+    {% elif latest[1] == "Warning" %}
+        <span class="condition-badge badge-warning">🟡 Warning</span>
+    {% else %}
+        <span class="condition-badge badge-critical">🔴 Critical</span>
+    {% endif %}
+    <div class="lmeta">Risk Score: <b>{{ latest[2] }}/100</b></div>
+    <div class="lmeta">🕐 {{ latest[3] }}</div>
+</div>
+{% endif %}
+
+</body>
+</html>
