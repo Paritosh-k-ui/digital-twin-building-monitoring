@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request
-from detector import predict_condition
+from detector import predict_condition, extract_image_metrics, compute_combined_score
 from datetime import datetime
 import sqlite3
 import os
@@ -22,7 +22,7 @@ def home():
 
 
 # =========================
-# ASSESS BUILDING (Image only)
+# ASSESS BUILDING
 # =========================
 
 @app.route("/assess", methods=["POST"])
@@ -31,7 +31,6 @@ def assess():
 
     if "image" not in request.files:
         return "No image selected"
-
     file = request.files["image"]
     if file.filename == "":
         return "No image selected"
@@ -39,119 +38,87 @@ def assess():
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
     file.save(filepath)
 
-    # ── ML Image Classification ─────────────────────────────────────────────
+    # ── ML classification ────────────────────────────────────────────────
     result     = predict_condition(filepath)
-    condition  = result["condition"]    # Good / Warning / Critical
+    condition  = result["condition"]
     confidence = result["confidence"]
-    color      = result["color"]
-    # ─────────────────────────────────────────────────────────────────────────
 
-    risk_score = {"Good": 15, "Warning": 50, "Critical": 85}.get(condition, 50)
+    # ── Image-derived CV metrics (from actual pixels) ────────────────────
+    img_metrics = extract_image_metrics(filepath, ml_condition=condition, ml_confidence=confidence)
+
+    # ── Combined weighted score (environmental metrics removed) ──────────
+    scores          = compute_combined_score(condition, confidence, img_metrics)
+    combined_score  = scores["combined_score"]
+    final_condition = scores["final_condition"]
+    ml_score        = scores["ml_score"]
+    cv_score        = scores["cv_score"]
 
     assessment_date = datetime.now().strftime("%d-%m-%Y %H:%M")
 
+    # ── Persist ──────────────────────────────────────────────────────────
     try:
         conn   = sqlite3.connect("database/buildings.db")
         cursor = conn.cursor()
 
         cursor.execute("""
             INSERT OR REPLACE INTO buildings
-            (building_name, condition, risk_score, image_path)
-            VALUES (?, ?, ?, ?)
-        """, (building_name, condition, risk_score, filepath))
+            (building_name, condition, risk_score, image_path,
+             crack_density, discolouration, tilt, vegetation, surface_roughness,
+             ml_score, cv_score, env_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """, (
+            building_name, final_condition, combined_score, filepath,
+            img_metrics["crack_density"], img_metrics["discolouration"],
+            img_metrics["tilt"],          img_metrics["vegetation"],
+            img_metrics["surface_roughness"],
+            ml_score, cv_score
+        ))
 
         cursor.execute("""
             INSERT INTO assessments
-            (building_name, condition, confidence, risk_score, assessment_date, image_path)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (building_name, condition, round(confidence * 100, 1), risk_score, assessment_date, filepath))
+            (building_name, condition, confidence, risk_score, assessment_date, image_path,
+             crack_density, discolouration, tilt, vegetation, surface_roughness,
+             ml_score, cv_score, env_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """, (
+            building_name, final_condition, round(confidence * 100, 1),
+            combined_score, assessment_date, filepath,
+            img_metrics["crack_density"], img_metrics["discolouration"],
+            img_metrics["tilt"],          img_metrics["vegetation"],
+            img_metrics["surface_roughness"],
+            ml_score, cv_score
+        ))
 
         conn.commit()
         conn.close()
     except Exception as e:
         print("DB Error:", e)
 
+    # ── Render result using result.html template ─────────────────────────
     conf_pct     = round(confidence * 100, 1)
-    border_color = {"Critical": "#ef4444", "Warning": "#f59e0b", "Good": "#22c55e"}.get(condition, "#38bdf8")
-    icon         = {"Critical": "🔴", "Warning": "🟡", "Good": "🟢"}.get(condition, "⚪")
+    border_color = {"Critical": "#ef4444", "Warning": "#f59e0b", "Good": "#22c55e"}.get(final_condition, "#38bdf8")
+    icon         = {"Critical": "🔴", "Warning": "🟡", "Good": "🟢"}.get(final_condition, "⚪")
+    rec          = {
+        "Critical": "Immediate structural intervention required. Building poses safety risk. Evacuate and schedule emergency repairs.",
+        "Warning":  "Moderate risk detected. Schedule professional structural inspection within 30 days and plan maintenance.",
+        "Good":     "Building is in good structural condition. Continue regular maintenance schedule and annual inspections.",
+    }.get(final_condition, "")
 
-    return f"""
-<!DOCTYPE html>
-<html>
-<head>
-<title>Assessment Result</title>
-<style>
-* {{ margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Arial,sans-serif; }}
-body {{ background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:30px; }}
-.card {{ background:rgba(30,41,59,0.95); backdrop-filter:blur(10px); border-radius:24px; padding:36px; width:100%; max-width:700px; border:2px solid {border_color}; box-shadow:0 0 60px rgba(0,0,0,0.5),0 0 30px {border_color}33; }}
-h1 {{ font-size:1.7rem; color:white; margin-bottom:20px; text-align:center; }}
-.img-wrap {{ text-align:center; margin-bottom:20px; }}
-.img-wrap img {{ max-width:100%; max-height:300px; border-radius:14px; border:1px solid #334155; }}
-.condition-box {{ background:#0f172a; border-radius:16px; padding:24px; text-align:center; margin-bottom:20px; border:1px solid {border_color}; }}
-.condition-icon {{ font-size:2.8rem; margin-bottom:6px; }}
-.condition-label {{ font-size:1.9rem; font-weight:bold; color:{border_color}; }}
-.conf-text {{ color:#94a3b8; font-size:0.9rem; margin-top:6px; }}
-.risk-wrap {{ margin:18px 0; }}
-.risk-label {{ display:flex; justify-content:space-between; font-size:0.85rem; color:#94a3b8; margin-bottom:6px; }}
-.risk-bar {{ height:12px; background:#1e293b; border-radius:6px; overflow:hidden; }}
-.risk-fill {{ height:100%; border-radius:6px; background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444); width:{risk_score}%; }}
-.details {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }}
-.detail-item {{ background:#0f172a; border-radius:12px; padding:14px; border:1px solid #334155; }}
-.detail-label {{ font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px; }}
-.detail-val {{ font-size:0.95rem; color:white; font-weight:600; }}
-.rec-box {{ background:#0f172a; border-radius:12px; padding:16px; border-left:4px solid {border_color}; margin-bottom:20px; }}
-.rec-box h3 {{ color:{border_color}; font-size:0.85rem; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em; }}
-.rec-box p {{ color:#cbd5e1; font-size:0.88rem; line-height:1.6; }}
-.btns {{ display:flex; gap:10px; flex-wrap:wrap; }}
-.btn {{ flex:1; text-align:center; padding:12px; border-radius:12px; text-decoration:none; font-weight:bold; font-size:0.88rem; transition:opacity 0.2s; min-width:140px; }}
-.btn:hover {{ opacity:0.85; }}
-.btn-blue  {{ background:linear-gradient(135deg,#38bdf8,#0ea5e9); color:black; }}
-.btn-green {{ background:#134e22; color:#22c55e; border:1px solid #22c55e; }}
-.btn-amber {{ background:#451a03; color:#f59e0b; border:1px solid #f59e0b; }}
-</style>
-</head>
-<body>
-<div class="card">
-    <h1>🏢 Building Assessment Result</h1>
-
-    <div class="img-wrap">
-        <img src="/{filepath}" alt="Building image">
-    </div>
-
-    <div class="condition-box">
-        <div class="condition-icon">{icon}</div>
-        <div class="condition-label">{condition}</div>
-        <div class="conf-text">ML Confidence: {conf_pct}%</div>
-    </div>
-
-    <div class="risk-wrap">
-        <div class="risk-label"><span>Estimated Risk Level</span><span>{risk_score}/100</span></div>
-        <div class="risk-bar"><div class="risk-fill"></div></div>
-    </div>
-
-    <div class="details">
-        <div class="detail-item"><div class="detail-label">Building</div><div class="detail-val">{building_name}</div></div>
-        <div class="detail-item"><div class="detail-label">Assessed On</div><div class="detail-val">{assessment_date}</div></div>
-    </div>
-
-    <div class="rec-box">
-        <h3>🔧 Recommendation</h3>
-        <p>
-        {"Immediate structural intervention required. Building poses safety risk. Evacuate and schedule emergency repairs." if condition == "Critical"
-        else "Moderate risk detected. Schedule professional structural inspection within 30 days and plan maintenance." if condition == "Warning"
-        else "Building is in good structural condition. Continue regular maintenance schedule and annual inspections."}
-        </p>
-    </div>
-
-    <div class="btns">
-        <a href="/" class="btn btn-blue">+ New Assessment</a>
-        <a href="/dashboard" class="btn btn-green">🏙 Digital Twin</a>
-        <a href="/history" class="btn btn-amber">📋 History</a>
-    </div>
-</div>
-</body>
-</html>
-"""
+    return render_template(
+        "result.html",
+        building_name=building_name,
+        filepath=filepath,
+        final_condition=final_condition,
+        combined_score=combined_score,
+        ml_score=ml_score,
+        cv_score=cv_score,
+        conf_pct=conf_pct,
+        assessment_date=assessment_date,
+        img_metrics=img_metrics,
+        border_color=border_color,
+        icon=icon,
+        rec=rec
+    )
 
 
 # =========================
@@ -164,7 +131,9 @@ def dashboard():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT building_name, condition, risk_score, image_path
+        SELECT building_name, condition, risk_score, image_path,
+               crack_density, discolouration, tilt, vegetation, surface_roughness,
+               ml_score, cv_score, env_score
         FROM buildings
     """)
     buildings = cursor.fetchall()
@@ -198,5 +167,76 @@ def history():
     return render_template("history.html", records=records)
 
 
+# =========================
+# DB SEEDER
+# =========================
+
+def seed_database_if_empty():
+    import shutil
+    conn = sqlite3.connect("database/buildings.db")
+    cursor = conn.cursor()
+    
+    # Check if there are any buildings
+    cursor.execute("SELECT COUNT(*) FROM buildings")
+    count = cursor.fetchone()[0]
+    
+    if count == 0:
+        print("[SEED] Seeding database with initial sample data...")
+        seeds = [
+            ("Block A - Central Library", "dataset/good/1.jpg", "seed_good.jpg"),
+            ("Block B - South Annex", "dataset/warning/1.jpg", "seed_warning.jpg"),
+            ("Block C - Parking Garage", "dataset/critical/1 (1).jpg", "seed_critical.jpg")
+        ]
+        
+        for name, src, dest_filename in seeds:
+            if os.path.exists(src):
+                dest_path = os.path.join(app.config["UPLOAD_FOLDER"], dest_filename)
+                shutil.copy(src, dest_path)
+                
+                # Perform analysis
+                result = predict_condition(dest_path)
+                metrics = extract_image_metrics(dest_path, ml_condition=result["condition"], ml_confidence=result["confidence"])
+                scores = compute_combined_score(result["condition"], result["confidence"], metrics)
+                
+                combined_score = scores["combined_score"]
+                final_condition = scores["final_condition"]
+                ml_score = scores["ml_score"]
+                cv_score = scores["cv_score"]
+                
+                # Insert into DB
+                cursor.execute("""
+                    INSERT OR REPLACE INTO buildings
+                    (building_name, condition, risk_score, image_path,
+                     crack_density, discolouration, tilt, vegetation, surface_roughness,
+                     ml_score, cv_score, env_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """, (
+                    name, final_condition, combined_score, dest_path,
+                    metrics["crack_density"], metrics["discolouration"],
+                    metrics["tilt"], metrics["vegetation"], metrics["surface_roughness"],
+                    ml_score, cv_score
+                ))
+                
+                # Insert into assessments
+                assessment_date = datetime.now().strftime("%d-%m-%Y %H:%M")
+                cursor.execute("""
+                    INSERT INTO assessments
+                    (building_name, condition, confidence, risk_score, assessment_date, image_path,
+                     crack_density, discolouration, tilt, vegetation, surface_roughness,
+                     ml_score, cv_score, env_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """, (
+                    name, final_condition, round(result["confidence"] * 100, 1),
+                    combined_score, assessment_date, dest_path,
+                    metrics["crack_density"], metrics["discolouration"],
+                    metrics["tilt"], metrics["vegetation"], metrics["surface_roughness"],
+                    ml_score, cv_score
+                ))
+        conn.commit()
+        print("[SEED] Seeding completed.")
+    conn.close()
+
+
 if __name__ == "__main__":
+    seed_database_if_empty()
     app.run(debug=True)

@@ -95,7 +95,7 @@ def load_dataset(dataset_dir: str):
             f for f in class_path.iterdir()
             if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".jfif"}
         ]
-        print(f"  [{class_name}] — {len(image_files)} images")
+        print(f"  [{class_name}] - {len(image_files)} images")
 
         for img_file in image_files:
             features = extract_features(str(img_file))
@@ -108,10 +108,10 @@ def load_dataset(dataset_dir: str):
 
 def train(dataset_dir: str = DATASET_DIR, model_dir: str = MODEL_DIR):
     print("=" * 55)
-    print("  Building Condition ML Classifier — Training")
+    print("  Building Condition ML Classifier - Training")
     print("=" * 55)
 
-    print("\n[1/4] Loading dataset …")
+    print("\n[1/4] Loading dataset ...")
     X, y, class_names = load_dataset(dataset_dir)
     print(f"\n  Total samples: {len(X)}")
 
@@ -125,9 +125,9 @@ def train(dataset_dir: str = DATASET_DIR, model_dir: str = MODEL_DIR):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y_encoded, test_size=0.2, random_state=RANDOM_STATE, stratify=y_encoded
     )
-    print(f"\n[3/4] Split → Train: {len(X_train)}, Test: {len(X_test)}")
+    print(f"\n[3/4] Split -> Train: {len(X_train)}, Test: {len(X_test)}")
 
-    print(f"\n[4/4] Training Random Forest (n_estimators={N_ESTIMATORS}) …")
+    print(f"\n[4/4] Training Random Forest (n_estimators={N_ESTIMATORS}) ...")
     clf = RandomForestClassifier(
         n_estimators=N_ESTIMATORS,
         random_state=RANDOM_STATE,
@@ -153,8 +153,8 @@ def train(dataset_dir: str = DATASET_DIR, model_dir: str = MODEL_DIR):
     with open(encoder_path, "wb") as f:
         pickle.dump(le, f)
 
-    print(f"\n[✓] Model saved   →  {model_path}")
-    print(f"[✓] Encoder saved →  {encoder_path}")
+    print(f"\n[OK] Model saved   ->  {model_path}")
+    print(f"[OK] Encoder saved ->  {encoder_path}")
     print("\nTraining complete. You can now run your Flask app.\n")
 
     return clf, le
